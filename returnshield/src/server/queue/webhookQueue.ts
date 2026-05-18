@@ -21,3 +21,7 @@ export function enqueueWebhookJob(job: WebhookJob) {
 export function listWebhookJobs() {
   return [...jobs]
 }
+
+export function clearWebhookJobs() {
+  jobs.length = 0
+}

@@ -4,35 +4,29 @@ import {
   ShieldCheck,
   Workflow,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { MetricCard } from '../../shared/components/MetricCard'
 import { useApiHealth } from './useApiHealth'
-
-const reviewItems = [
-  {
-    id: 'RS-1042',
-    customer: 'High repeat return velocity',
-    risk: 'High',
-    reason:
-      '4 refunds in 60 days, one item-not-received claim, high order value',
-  },
-  {
-    id: 'RS-1043',
-    customer: 'Address cluster match',
-    risk: 'Review',
-    reason: 'Shared shipping address with two prior refunded accounts',
-  },
-  {
-    id: 'RS-1044',
-    customer: 'Low-friction approval',
-    risk: 'Low',
-    reason: 'Long purchase history and low return rate',
-  },
-]
+import { useDashboardMetrics } from './useDashboardMetrics'
+import { useReviewQueue } from './useReviewQueue'
 
 export function DashboardPage() {
   const apiHealth = useApiHealth()
+  const dashboardMetrics = useDashboardMetrics()
+  const reviewQueue = useReviewQueue()
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
 
   console.info('[ReturnShield] Dashboard initialized')
+
+  useEffect(() => {
+    const timerId = setInterval(() => {
+      setNowTimestamp(Date.now())
+    }, 1000)
+
+    return () => {
+      clearInterval(timerId)
+    }
+  }, [])
 
   const apiStatusLabel =
     apiHealth.status === 'ready'
@@ -47,6 +41,63 @@ export function DashboardPage() {
       : apiHealth.status === 'loading'
         ? 'text-slate-300'
         : 'text-red-300'
+
+  const returnsScoredLabel =
+    dashboardMetrics.status === 'ready'
+      ? dashboardMetrics.data.returnsScored.toLocaleString('en-US')
+      : '--'
+
+  const highRiskHoldsLabel =
+    dashboardMetrics.status === 'ready'
+      ? dashboardMetrics.data.highRiskHolds.toLocaleString('en-US')
+      : '--'
+
+  const marginSavedLabel =
+    dashboardMetrics.status === 'ready'
+      ? new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0,
+        }).format(dashboardMetrics.data.estimatedMarginSavedCents / 100)
+      : '--'
+
+  const reviewWorkflowsLabel =
+    dashboardMetrics.status === 'ready'
+      ? dashboardMetrics.data.reviewWorkflows.toLocaleString('en-US')
+      : '--'
+
+  const metricsDetail =
+    dashboardMetrics.status === 'ready' && dashboardMetrics.data.lastUpdated
+      ? `Updated ${Math.max(
+          0,
+          Math.floor(
+            (nowTimestamp - new Date(dashboardMetrics.data.lastUpdated).getTime()) /
+              1000,
+          ),
+        )}s ago`
+      : dashboardMetrics.status === 'loading'
+        ? 'Loading live metrics'
+        : 'Unable to load metrics'
+
+  const metricsAgeSeconds =
+    dashboardMetrics.status === 'ready' && dashboardMetrics.data.lastUpdated
+      ? Math.max(
+          0,
+          Math.floor(
+            (nowTimestamp - new Date(dashboardMetrics.data.lastUpdated).getTime()) /
+              1000,
+          ),
+        )
+      : null
+
+  const metricsDetailClassName =
+    metricsAgeSeconds === null
+      ? 'text-slate-400'
+      : metricsAgeSeconds >= 60
+        ? 'text-red-300'
+        : metricsAgeSeconds >= 30
+          ? 'text-amber-300'
+          : 'text-slate-400'
 
   return (
     <main className="min-h-screen bg-neon-ink text-white">
@@ -85,39 +136,58 @@ export function DashboardPage() {
             <MetricCard
               icon={<ShieldCheck className="h-6 w-6" />}
               label="Returns scored"
-              value="0"
-              detail="Ready for Shopify ingestion"
+              value={returnsScoredLabel}
+              detail={metricsDetail}
+              detailClassName={metricsDetailClassName}
             />
             <MetricCard
               icon={<AlertTriangle className="h-6 w-6" />}
               label="High-risk holds"
-              value="0"
-              detail="Risk engine pending"
+              value={highRiskHoldsLabel}
+              detail={metricsDetail}
+              detailClassName={metricsDetailClassName}
             />
             <MetricCard
               icon={<BadgeDollarSign className="h-6 w-6" />}
               label="Estimated margin saved"
-              value="$0"
-              detail="ROI model pending"
+              value={marginSavedLabel}
+              detail={metricsDetail}
+              detailClassName={metricsDetailClassName}
             />
             <MetricCard
               icon={<Workflow className="h-6 w-6" />}
               label="Review workflows"
-              value="3"
-              detail="Approve, hold, investigate"
+              value={reviewWorkflowsLabel}
+              detail={metricsDetail}
+              detailClassName={metricsDetailClassName}
             />
           </section>
+
+          {dashboardMetrics.status === 'error' ? (
+            <section className="mt-4 rounded-2xl border border-red-400/30 bg-red-950/30 px-4 py-3">
+              <p className="text-sm font-semibold text-red-300">
+                Metrics API unavailable
+              </p>
+              <p className="mt-1 text-xs text-red-200">
+                Showing stale or empty values until connectivity is restored.
+              </p>
+            </section>
+          ) : null}
 
           <section className="mt-8 rounded-3xl border border-white/10 bg-white/8 p-6 backdrop-blur-xl">
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold">Return review queue</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  Placeholder data until Shopify webhooks are connected.
+                  Live webhook ingestion queue.
                 </p>
               </div>
               <span className="rounded-full border border-neon-purple/40 px-4 py-2 text-sm text-neon-purple">
-                Phase 2
+                {reviewQueue.status === 'ready'
+                  ? `${reviewQueue.data.count} jobs`
+                  : reviewQueue.status === 'loading'
+                    ? 'Loading'
+                    : 'Unavailable'}
               </span>
             </div>
 
@@ -132,24 +202,44 @@ export function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {reviewItems.map((item) => (
-                    <tr key={item.id} className="border-t border-white/10">
-                      <td className="px-4 py-4 font-semibold text-neon-cyan">
-                        {item.id}
-                      </td>
-                      <td className="px-4 py-4 text-slate-200">
-                        {item.customer}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs">
-                          {item.risk}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-slate-400">
-                        {item.reason}
+                  {reviewQueue.status === 'ready' &&
+                  reviewQueue.data.jobs.length > 0 ? (
+                    reviewQueue.data.jobs.map((job) => {
+                      const riskLabel = job.topic.toLowerCase().includes('return')
+                        ? 'High'
+                        : 'Review'
+
+                      return (
+                        <tr key={job.id} className="border-t border-white/10">
+                          <td className="px-4 py-4 font-semibold text-neon-cyan">
+                            {job.id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-4 text-slate-200">
+                            {job.topic}
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs">
+                              {riskLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 text-slate-400">
+                            {job.shopDomain} ·{' '}
+                            {new Date(job.receivedAt).toLocaleTimeString('en-US')}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr className="border-t border-white/10">
+                      <td className="px-4 py-4 text-slate-400" colSpan={4}>
+                        {reviewQueue.status === 'loading'
+                          ? 'Loading queue...'
+                          : reviewQueue.status === 'error'
+                            ? 'Unable to load queue.'
+                            : 'No webhook jobs yet.'}
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>

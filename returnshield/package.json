@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && pnpm dlx vite@8.0.13 build",
     "preview": "pnpm dlx vite@8.0.13 preview --host 0.0.0.0",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -51,7 +52,10 @@
     "tsx": "latest",
     "typescript": "latest",
     "typescript-eslint": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "vitest": "^2.1.8",
+    "supertest": "^7.1.1",
+    "@types/supertest": "^6.0.3"
   },
   "packageManager": "pnpm"
 }

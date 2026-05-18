@@ -4,6 +4,7 @@ import { z } from 'zod'
 const envSchema = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().default(8787),
+  MARGIN_SAVED_PER_HIGH_RISK_HOLD_CENTS: z.coerce.number().int().min(0).default(3200),
 
   SHOPIFY_API_KEY: z.string().min(1, 'SHOPIFY_API_KEY is required'),
   SHOPIFY_API_SECRET: z.string().min(1, 'SHOPIFY_API_SECRET is required'),
